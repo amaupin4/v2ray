@@ -1,6 +1,6 @@
-const upstream = 'your-vps-ip-or-domain.com'; // Replace with your VPS IP or domain
+const upstream = 'dagonuniversity.edu.eu.org'; // Replace with your VPS IP or domain
 const upstreamPath = '/vless'; // WebSocket path for V2Ray
-const uuid = 'your-uuid-here'; // Replace with your generated UUID
+const uuid = '2a0eef91-bae7-4c2a-bcea-fcd45e7088ad'; // Replace with your generated UUID
 const allowedPorts = [443, 8443, 2053, 2083, 2087, 2096]; // Cloudflare-supported TLS ports
 const workerPort = 443; // Default port, change if needed
 
