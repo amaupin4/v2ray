@@ -1,83 +1,75 @@
 // _worker.js
 // Cloudflare Worker ကုဒ်သည် V2Ray (VLESS+WS+TLS) နှင့် အလုပ်လုပ်ရန်အတွက် ပြင်ဆင်ထားသည်။
 
-const upstream = ['cdn.xn--b6gac.eu.org', 'cdn-all.xn--b6gac.eu.org', 'workers.cloudflare.cyou']; // V2Ray ဆာဗာ၏ IP သို့မဟုတ် domain (ဥပမာ: dagonuniversity.edu.eu.org)
+const proxyIPs = ['cdn.xn--b6gac.eu.org', 'cdn-all.xn--b6gac.eu.org', 'workers.cloudflare.cyou'];
+const upstream = proxyIPs[Math.floor(Math.random() * proxyIPs.length)]; // ကျပန်းရွေးချယ်ထားသော V2Ray ဆာဗာ
 const upstreamPath = '/vless';
 const uuid = '2a0eef91-bae7-4c2a-bcea-fcd45e7088ad'; // သင်၏ V2Ray UUID
 const allowedPorts = [443, 8443, 2053, 2083, 2087, 2096];
 const workerPort = 443;
 
-// cn_hostnames စာရင်းကို သင်ပေးထားသော ကုဒ်မှ ထည့်သွင်းထားသည်။
 const cn_hostnames = [
-    'weibo.com', 'www.baidu.com', 'www.qq.com', 'www.taobao.com', 'www.jd.com', 
-    'www.sina.com.cn', 'www.sohu.com', 'www.tmall.com', 'www.163.com', 'www.zhihu.com', 
-    'www.youku.com', 'www.xinhuanet.com', 'www.douban.com', 'www.meituan.com', 
-    'www.toutiao.com', 'www.ifeng.com', 'www.autohome.com.cn', 'www.360.cn', 
-    'www.douyin.com', 'www.kuaidi100.com', 'www.wechat.com', 'www.csdn.net', 
-    'www.imgo.tv', 'www.aliyun.com', 'www.eyny.com', 'www.mgtv.com', 'www.xunlei.com', 
-    'www.hao123.com', 'www.bilibili.com', 'www.youth.cn', 'www.hupu.com', 
-    'www.youzu.com', 'www.panda.tv', 'www.tudou.com', 'www.zol.com.cn', 
-    'www.toutiao.io', 'www.tiktok.com', 'www.netease.com', 'www.cnki.net', 
-    'www.zhibo8.cc', 'www.zhangzishi.cc', 'www.xueqiu.com', 'www.qqgongyi.com', 
-    'www.ximalaya.com', 'www.dianping.com', 'www.suning.com', 'www.zhaopin.com', 
-    'www.jianshu.com', 'www.mafengwo.cn', 'www.51cto.com', 'www.qidian.com', 
-    'www.ctrip.com', 'www.pconline.com.cn', 'www.cnzz.com', 'www.telegraph.co.uk', 
-    'www.ynet.com', 'www.ted.com', 'www.renren.com', 'www.pptv.com', 'www.liepin.com', 
-    'www.881903.com', 'www.aipai.com', 'www.ttpaihang.com', 'www.quyaoya.com', 
-    'www.91.com', 'www.dianyou.cn', 'www.tmtpost.com', 'www.douban.com', 
-    'www.guancha.cn', 'www.so.com', 'www.58.com', 'www.cnblogs.com', 'www.cntv.cn', 
+    'weibo.com', 'www.baidu.com', 'www.qq.com', 'www.taobao.com', 'www.jd.com',
+    'www.sina.com.cn', 'www.sohu.com', 'www.tmall.com', 'www.163.com', 'www.zhihu.com',
+    'www.youku.com', 'www.xinhuanet.com', 'www.douban.com', 'www.meituan.com',
+    'www.toutiao.com', 'www.ifeng.com', 'www.autohome.com.cn', 'www.360.cn',
+    'www.douyin.com', 'www.kuaidi100.com', 'www.wechat.com', 'www.csdn.net',
+    'www.imgo.tv', 'www.aliyun.com', 'www.eyny.com', 'www.mgtv.com', 'www.xunlei.com',
+    'www.hao123.com', 'www.bilibili.com', 'www.youth.cn', 'www.hupu.com',
+    'www.youzu.com', 'www.panda.tv', 'www.tudou.com', 'www.zol.com.cn',
+    'www.toutiao.io', 'www.tiktok.com', 'www.netease.com', 'www.cnki.net',
+    'www.zhibo8.cc', 'www.zhangzishi.cc', 'www.xueqiu.com', 'www.qqgongyi.com',
+    'www.ximalaya.com', 'www.dianping.com', 'www.suning.com', 'www.zhaopin.com',
+    'www.jianshu.com', 'www.mafengwo.cn', 'www.51cto.com', 'www.qidian.com',
+    'www.ctrip.com', 'www.pconline.com.cn', 'www.cnzz.com', 'www.telegraph.co.uk',
+    'www.ynet.com', 'www.ted.com', 'www.renren.com', 'www.pptv.com', 'www.liepin.com',
+    'www.881903.com', 'www.aipai.com', 'www.ttpaihang.com', 'www.quyaoya.com',
+    'www.91.com', 'www.dianyou.cn', 'www.tmtpost.com', 'www.douban.com',
+    'www.guancha.cn', 'www.so.com', 'www.58.com', 'www.cnblogs.com', 'www.cntv.cn',
     'www.secoo.com'
 ];
 
-addEventListener('fetch', event => {
-    event.respondWith(handleRequest(event.request));
-});
+export default {
+    async fetch(request, env, ctx) {
+        try {
+            const url = new URL(request.url);
+            const upgradeHeader = request.headers.get('Upgrade');
 
-/**
- * Handles incoming requests and routes them to either WebSocket or reverse proxy.
- * @param {Request} request The incoming request object.
- * @returns {Promise<Response>} A Promise that resolves to the response object.
- */
-async function handleRequest(request) {
-    const url = new URL(request.url);
-    const upgradeHeader = request.headers.get('Upgrade');
+            if (!upgradeHeader || upgradeHeader !== 'websocket') {
+                // Handle non-WebSocket requests with reverse proxy
+                const randomHostname = cn_hostnames[Math.floor(Math.random() * cn_hostnames.length)];
+                const newHeaders = new Headers(request.headers);
+                newHeaders.set('cf-connecting-ip', '1.2.3.4');
+                newHeaders.set('x-forwarded-for', '1.2.3.4');
+                newHeaders.set('x-real-ip', '1.2.3.4');
+                newHeaders.set('referer', 'https://www.google.com/search?q=edtunnel');
 
-    if (!upgradeHeader || upgradeHeader !== 'websocket') {
-        // Handle non-WebSocket requests with reverse proxy to cn_hostnames
-        const randomHostname = cn_hostnames[Math.floor(Math.random() * cn_hostnames.length)];
-        const newHeaders = new Headers(request.headers);
-        newHeaders.set('cf-connecting-ip', '1.2.3.4');
-        newHeaders.set('x-forwarded-for', '1.2.3.4');
-        newHeaders.set('x-real-ip', '1.2.3.4');
-        newHeaders.set('referer', 'https://www.google.com/search?q=edtunnel');
+                const proxyUrl = `https://${randomHostname}${url.pathname}${url.search}`;
+                let modifiedRequest = new Request(proxyUrl, {
+                    method: request.method,
+                    headers: newHeaders,
+                    body: request.body,
+                    redirect: 'manual',
+                });
 
-        const proxyUrl = `https://${randomHostname}${url.pathname}${url.search}`;
-        let modifiedRequest = new Request(proxyUrl, {
-            method: request.method,
-            headers: newHeaders,
-            body: request.body,
-            redirect: 'manual',
-        });
-
-        const proxyResponse = await fetch(modifiedRequest, { redirect: 'manual' });
-        if ([301, 302].includes(proxyResponse.status)) {
-            return new Response(`Redirects to ${randomHostname} are not allowed.`, {
-                status: 403,
-                statusText: 'Forbidden',
-            });
+                const proxyResponse = await fetch(modifiedRequest, { redirect: 'manual' });
+                if ([301, 302].includes(proxyResponse.status)) {
+                    return new Response(`Redirects to ${randomHostname} are not allowed.`, {
+                        status: 403,
+                        statusText: 'Forbidden',
+                    });
+                }
+                return proxyResponse;
+            } else {
+                // Handle WebSocket requests for V2Ray
+                return await handleWebSocket(request);
+            }
+        } catch (err) {
+            return new Response(`Error: ${err.message}`, { status: 500 });
         }
-        return proxyResponse;
-    } else {
-        // Handle WebSocket requests for V2Ray
-        return await handleWebSocket(request);
     }
-}
+};
 
-/**
- * Handles WebSocket requests for V2Ray.
- * @param {Request} request The incoming WebSocket request.
- * @returns {Promise<Response>} A Promise that resolves to a WebSocket response.
- */
 async function handleWebSocket(request) {
     const webSocketPair = new WebSocketPair();
     const [client, server] = Object.values(webSocketPair);
@@ -136,13 +128,6 @@ async function handleWebSocket(request) {
     });
 }
 
-/**
- * Connects to the remote V2Ray server.
- * @param {string} address The remote address to connect to.
- * @param {number} port The remote port to connect to.
- * @param {function} log The logging function.
- * @returns {Promise<Socket>} A Promise that resolves to the connected socket.
- */
 async function connectToRemote(address, port, log) {
     const socket = connect({
         hostname: address,
@@ -152,13 +137,6 @@ async function connectToRemote(address, port, log) {
     return socket;
 }
 
-/**
- * Creates a readable stream from a WebSocket.
- * @param {WebSocket} webSocketServer The WebSocket server.
- * @param {string} earlyDataHeader The early data header.
- * @param {function} log The logging function.
- * @returns {ReadableStream} A readable stream from the WebSocket.
- */
 function makeReadableWebSocketStream(webSocketServer, earlyDataHeader, log) {
     let readableStreamCancel = false;
     const stream = new ReadableStream({
@@ -194,12 +172,6 @@ function makeReadableWebSocketStream(webSocketServer, earlyDataHeader, log) {
     return stream;
 }
 
-/**
- * Processes the VLESS header.
- * @param {ArrayBuffer} vlessBuffer The VLESS header buffer.
- * @param {string} userID The user ID for validation.
- * @returns {Object} The processed header information.
- */
 function processVlessHeader(vlessBuffer, userID) {
     if (vlessBuffer.byteLength < 24) {
         return { hasError: true, message: 'Invalid VLESS header' };
@@ -261,13 +233,6 @@ function processVlessHeader(vlessBuffer, userID) {
     };
 }
 
-/**
- * Converts a remote socket to a WebSocket stream.
- * @param {Socket} remoteSocket The remote socket.
- * @param {WebSocket} webSocket The WebSocket connection.
- * @param {ArrayBuffer|null} vlessResponseHeader The VLESS response header.
- * @param {function} log The logging function.
- */
 async function remoteSocketToWS(remoteSocket, webSocket, vlessResponseHeader, log) {
     let hasIncomingData = false;
     await remoteSocket.readable.pipeTo(new WritableStream({
@@ -295,10 +260,6 @@ async function remoteSocketToWS(remoteSocket, webSocket, vlessResponseHeader, lo
     }
 }
 
-/**
- * Safely closes a WebSocket connection.
- * @param {WebSocket} socket The WebSocket to close.
- */
 function safeCloseWebSocket(socket) {
     try {
         if (socket.readyState === 1 || socket.readyState === 2) {
@@ -309,11 +270,6 @@ function safeCloseWebSocket(socket) {
     }
 }
 
-/**
- * Converts a base64 string to an ArrayBuffer.
- * @param {string} base64Str The base64 string.
- * @returns {Object} The decoded ArrayBuffer or error.
- */
 function base64ToArrayBuffer(base64Str) {
     if (!base64Str) return { earlyData: null, error: null };
     try {
@@ -326,12 +282,6 @@ function base64ToArrayBuffer(base64Str) {
     }
 }
 
-/**
- * Converts a byte array to a UUID string.
- * @param {Uint8Array} arr The byte array.
- * @param {number} offset The offset to start from.
- * @returns {string} The UUID string.
- */
 function stringify(arr, offset = 0) {
     const byteToHex = [];
     for (let i = 0; i < 256; ++i) {
